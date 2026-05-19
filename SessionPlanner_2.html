@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GSD Operations 2.0 — Session Planner</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap');
+
+  :root {
+    --bg: #0a0c12; --surface: #13161f; --surface2: #1c2030; --border: #252a3d;
+    --accent: #f0a500; --accent2: #3d9be9; --green: #3ecf74; --red: #e85c5c; --purple: #9b6ae8;
+    --text: #d4d8f0; --muted: #5a6080;
+    --mono: 'Share Tech Mono', monospace; --sans: 'Barlow', sans-serif; --cond: 'Barlow Condensed', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+  header {
+    background: var(--surface);
+    border-bottom: 2px solid var(--accent);
+    padding: 14px 24px;
+    display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-family: var(--cond); font-size: 22px; font-weight: 800; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; }
+  .logo span { color: var(--text); font-weight: 400; }
+  .header-status { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: right; }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; }
+  .status-dot.live { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .status-dot.error { background: var(--red); }
+
+  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+  .api-bar { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent2); border-radius: 6px; padding: 12px 16px; display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+  .api-bar label { font-family: var(--mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
+  .api-bar input { flex: 1; min-width: 260px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 7px 10px; }
+  .api-bar input:focus { outline: none; border-color: var(--accent2); }
+  #tokenStatus { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+  .btn { background: var(--accent); color: #000; border: none; border-radius: 4px; padding: 9px 20px; font-family: var(--cond); font-size: 14px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn.green { background: var(--green); color: #000; }
+  .btn.blue { background: var(--accent2); color: #000; }
+  .btn.red { background: var(--red); }
+
+  .phase { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
+  .phase-header { padding: 14px 20px; background: var(--surface2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .phase-num { background: var(--accent); color: #000; font-family: var(--cond); font-weight: 700; font-size: 13px; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .phase-title { font-family: var(--cond); font-size: 16px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+  .phase-body { padding: 20px; }
+
+  .log { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 12px; font-family: var(--mono); font-size: 11px; color: var(--muted); max-height: 200px; overflow-y: auto; line-height: 1.8; }
+  .log .ok { color: var(--green); } .log .warn { color: var(--accent); } .log .err { color: var(--red); } .log .info { color: var(--accent2); }
+
+  .progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin: 10px 0; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; width: 0%; }
+
+  .action-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+
+  .session-select { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+  .session-select label { font-family: var(--mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .session-select select { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-family: var(--mono); font-size: 13px; padding: 8px 12px; min-width: 220px; }
+  .session-select select:focus { outline: none; border-color: var(--accent); }
+
+  /* Movement preview table */
+  .mv-table-wrap { overflow-x: auto; margin-top: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th { background: var(--surface2); color: var(--muted); font-family: var(--cond); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 10px; padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 11px; vertical-align: middle; }
+  tr:hover td { background: var(--surface2); }
+
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 3px; font-family: var(--cond); font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  .badge-direct { background: rgba(62,207,116,0.15); color: var(--green); border: 1px solid rgba(62,207,116,0.3); }
+  .badge-transfer { background: rgba(155,106,232,0.15); color: var(--purple); border: 1px solid rgba(155,106,232,0.3); }
+  .badge-unassigned { background: rgba(232,92,92,0.15); color: var(--red); border: 1px solid rgba(232,92,92,0.3); }
+  .badge-nextsession { background: rgba(240,165,0,0.15); color: var(--accent); border: 1px solid rgba(240,165,0,0.3); }
+
+  .load-loaded { color: var(--green); }
+  .load-empty { color: var(--muted); }
+
+  .stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .stat-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 18px; flex: 1; min-width: 110px; }
+  .stat-val { font-family: var(--mono); font-size: 26px; color: var(--accent); line-height: 1; }
+  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+  .summary-box { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--green); border-radius: 6px; padding: 14px 18px; margin-bottom: 16px; font-size: 13px; line-height: 1.8; }
+  .summary-box strong { color: var(--accent); }
+
+  .hidden { display: none !important; }
+
+  select { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 6px 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GSD Ops 2.0 <span>/ Session Planner</span></div>
+  <div class="header-status">
+    <span class="status-dot" id="connDot"></span>
+    <span id="connLabel">Not connected</span>
+  </div>
+</header>
+
+<main>
+
+  <div class="api-bar">
+    <label>Airtable Token</label>
+    <input type="password" id="tokenInput" placeholder="patXXXXXXXXXXXXXX...">
+    <button class="btn secondary" onclick="saveToken()">Save</button>
+    <span id="tokenStatus">Paste your Airtable Personal Access Token</span>
+  </div>
+
+  <!-- Phase 1: Load & Select Session -->
+  <div class="phase">
+    <div class="phase-header"><div class="phase-num">1</div><div class="phase-title">Load Data &amp; Select Session</div></div>
+    <div class="phase-body">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">
+        Loads Waybills, Trains, Train Stops and Sessions from Airtable, then plan movements for the selected session.
+      </p>
+      <div class="session-select">
+        <label>Session</label>
+        <select id="sessionSelect">
+          <option value="">— Load data first —</option>
+        </select>
+      </div>
+      <div class="log" id="loadLog"><span class="info">Save your token then click Load Data.</span></div>
+      <div class="action-row">
+        <button class="btn blue" id="btnLoad" onclick="loadData()">Load Data</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase 2: Plan Movements -->
+  <div class="phase">
+    <div class="phase-header"><div class="phase-num">2</div><div class="phase-title">Plan Session Movements</div></div>
+    <div class="phase-body">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">
+        Matches each car's waybill movement to the correct train(s). Identifies direct moves, Blue Lake transfers, and unassigned cars.
+      </p>
+      <div class="action-row" style="margin-top:0;margin-bottom:14px;">
+        <button class="btn" id="btnPlan" onclick="planMovements()" disabled>Plan Movements</button>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="planProgress"></div></div>
+      <div class="log" id="planLog"><span class="info">Load data and select a session first.</span></div>
+    </div>
+  </div>
+
+  <!-- Phase 3: Review -->
+  <div class="phase hidden" id="reviewPhase">
+    <div class="phase-header"><div class="phase-num">3</div><div class="phase-title">Review Planned Movements</div></div>
+    <div class="phase-body">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-val" id="statDirect">—</div><div class="stat-label">Direct</div></div>
+        <div class="stat-card"><div class="stat-val" id="statTransfer">—</div><div class="stat-label">Via Blue Lake</div></div>
+        <div class="stat-card"><div class="stat-val" id="statUnassigned">—</div><div class="stat-label">Unassigned</div></div>
+        <div class="stat-card"><div class="stat-val" id="statNextSession">—</div><div class="stat-label">Next Session</div></div>
+      </div>
+      <div id="summaryBox" class="summary-box"></div>
+      <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+        <select id="filterStatus" onchange="renderTable()">
+          <option value="">All Movements</option>
+          <option value="direct">Direct</option>
+          <option value="transfer">Via Blue Lake</option>
+          <option value="unassigned">Unassigned</option>
+          <option value="nextsession">Next Session</option>
+        </select>
+        <select id="filterTrain" onchange="renderTable()">
+          <option value="">All Trains</option>
+        </select>
+      </div>
+      <div class="mv-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Car ID</th>
+              <th>Type</th>
+              <th>From Town</th>
+              <th>From Siding</th>
+              <th>To Town</th>
+              <th>To Siding</th>
+              <th>Load</th>
+              <th>Pickup Train</th>
+              <th>Setout Train</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="mvBody"></tbody>
+        </table>
+      </div>
+      <div class="action-row">
+        <button class="btn green" id="btnWrite" onclick="writeMovements()" disabled>Write to Airtable</button>
+        <button class="btn secondary" onclick="planMovements()">Re-plan</button>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="writeProgress"></div></div>
+      <div class="log" id="writeLog" style="margin-top:12px;"><span class="info">Review above then click Write to Airtable.</span></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const BASE_ID = 'app49M67jxGfWziFD';
+const AT_API  = 'https://api.airtable.com/v0';
+const TABLE = {
+  WAYBILLS:      'tbl5QlUJ0IVi6748p',
+  TRAINS:        'tbl3CP8C4eL7HxpkN',
+  TRAIN_STOPS:   'tblBXcoDniBjMTy9r',
+  SESSIONS:      'tblmXvYCqUy9IVnmm',
+  SESSION_MOVES: 'tblLCxzGrKV83SsyT',
+  SESSION_TRAIN_LIST: 'tblmxPJbZXyc26B6o',
+  ROLLING_STOCK: 'tblW8vBx4TgNWRVP1',
+  SIDINGS:       'tblOGpM1mH4U5YnPd',
+};
+
+let token = '';
+let data = { waybills:[], trains:[], trainStops:{}, sessions:[] };
+let plannedMovements = [];
+
+// ── Token ──────────────────────────────────────────────────────────────────
+function saveToken() {
+  const v = document.getElementById('tokenInput').value.trim();
+  if(v.length > 10) {
+    sessionStorage.setItem('at', v); token = v;
+    document.getElementById('tokenStatus').textContent = '✓ Token saved';
+    document.getElementById('tokenStatus').style.color = 'var(--green)';
+    document.getElementById('tokenInput').value = '••••••••••••••••';
+    setConn('', 'Token ready — click Load Data');
+  } else {
+    document.getElementById('tokenStatus').textContent = '✗ Token too short';
+    document.getElementById('tokenStatus').style.color = 'var(--red)';
+  }
+}
+function getToken() {
+  if(token) return token;
+  const s = sessionStorage.getItem('at'); if(s) { token=s; return s; }
+  return document.getElementById('tokenInput').value.trim()||null;
+}
+function setConn(state, label) {
+  document.getElementById('connDot').className = 'status-dot'+(state==='live'?' live':state==='error'?' error':'');
+  document.getElementById('connLabel').textContent = label;
+}
+
+// ── Logging ────────────────────────────────────────────────────────────────
+function log(el, msg, cls='') {
+  const d=document.getElementById(el), line=document.createElement('div');
+  line.className=cls; line.textContent=msg; d.appendChild(line); d.scrollTop=d.scrollHeight;
+}
+function clearLog(el) { document.getElementById(el).innerHTML=''; }
+
+// ── Airtable REST ──────────────────────────────────────────────────────────
+async function atFetch(tableId, formula='') {
+  const tok = getToken();
+  if(!tok) throw new Error('No token saved.');
+  let records=[], offset=null;
+  do {
+    const url = new URL(`${AT_API}/${BASE_ID}/${tableId}`);
+    url.searchParams.set('pageSize','100');
+    if(offset) url.searchParams.set('offset', offset);
+    if(formula) url.searchParams.set('filterByFormula', formula);
+    const resp = await fetch(url.toString(), { headers:{ Authorization:`Bearer ${tok}` } });
+    if(!resp.ok) {
+      const e = await resp.json().catch(()=>({}));
+      throw new Error(`Airtable ${resp.status}: ${e.error?.message||resp.statusText}`);
+    }
+    const json = await resp.json();
+    records = records.concat(json.records||[]);
+    offset = json.offset||null;
+  } while(offset);
+  return records;
+}
+
+async function atCreate(tableId, fieldsList) {
+  const tok = getToken();
+  if(!tok) throw new Error('No token saved.');
+  const url = `${AT_API}/${BASE_ID}/${tableId}`;
+  let created=0;
+  for(let i=0; i<fieldsList.length; i+=10) {
+    const batch = fieldsList.slice(i, i+10);
+    const resp = await fetch(url, {
+      method:'POST',
+      headers:{ Authorization:`Bearer ${tok}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ records: batch.map(f=>({fields:f})) })
+    });
+    if(!resp.ok) {
+      const e = await resp.json().catch(()=>({}));
+      throw new Error(`Write error ${resp.status}: ${e.error?.message||resp.statusText}`);
+    }
+    created += batch.length;
+    document.getElementById('writeProgress').style.width = `${(created/fieldsList.length)*100}%`;
+    log('writeLog', `  ✓ Batch ${Math.floor(i/10)+1}: ${batch.length} written (${created}/${fieldsList.length})`, 'ok');
+    await new Promise(r=>setTimeout(r,220));
+  }
+  return created;
+}
+
+// ── Load Data ──────────────────────────────────────────────────────────────
+async function loadData() {
+  const btn=document.getElementById('btnLoad'); btn.disabled=true;
+  clearLog('loadLog'); setConn('','Loading...');
+  log('loadLog','→ Loading data from Airtable...','info');
+
+  try {
+    // Sessions
+    log('loadLog','  Fetching Sessions...','info');
+    const sessRecs = await atFetch(TABLE.SESSIONS);
+    data.sessions = sessRecs.map(r=>({
+      id: r.id,
+      name: r.fields['Session Name']||r.fields['Name']||'',
+      code: r.fields['Session Code from Table']||r.fields['Session Code']||'',
+    }));
+    log('loadLog',`  ✓ ${data.sessions.length} sessions: ${data.sessions.map(s=>s.code).join(', ')}`,'ok');
+
+    // Populate session dropdown
+    const sel = document.getElementById('sessionSelect');
+    sel.innerHTML = '<option value="">— Select a session —</option>';
+    data.sessions.forEach(s=>{
+      const o=document.createElement('option'); o.value=s.id; o.textContent=`${s.name} (${s.code})`; sel.appendChild(o);
+    });
+
+    // Trains
+    log('loadLog','  Fetching Trains...','info');
+    const trainRecs = await atFetch(TABLE.TRAINS);
+    // Build train map first (without session IDs)
+    const trainMap = {};
+    trainRecs.forEach(r=>{
+      trainMap[r.id] = {
+        id: r.id,
+        number: r.fields['Train Number']||'',
+        name: r.fields['Train Name']||'',
+        sessionIds: [], // will be populated from junction table
+        active: r.fields['Active']!==false,
+      };
+    });
+
+    // Load Session Train List junction table to get train→session relationships
+    log('loadLog','  Fetching Session Train List...','info');
+    const stlRecs = await atFetch(TABLE.SESSION_TRAIN_LIST);
+    stlRecs.forEach(r=>{
+      const trainIds   = r.fields['Train Link']||[];
+      const sessionIds = r.fields['Session Link']||[];
+      trainIds.forEach(tid=>{
+        if(trainMap[tid]) {
+          sessionIds.forEach(sid=>{
+            if(!trainMap[tid].sessionIds.includes(sid)) trainMap[tid].sessionIds.push(sid);
+          });
+        }
+      });
+    });
+
+    data.trains = Object.values(trainMap).filter(t=>t.active&&t.number);
+    log('loadLog',`  ✓ ${data.trains.length} active trains loaded`,'ok');
+    // Debug: show sample train sessions
+    const sampleT = data.trains.find(t=>t.sessionIds.length>0);
+    if(sampleT) log('loadLog',`  Sample: Train ${sampleT.number} runs in ${sampleT.sessionIds.length} session(s)`,'info');
+    else log('loadLog','  ⚠ No trains have session assignments — check Session Train List data','warn');
+
+    // Train Stops
+    log('loadLog','  Fetching Train Stops...','info');
+    const stopRecs = await atFetch(TABLE.TRAIN_STOPS);
+    data.trainStops = {};
+    stopRecs.forEach(r=>{
+      const trainIds = r.fields['Train Link']||[];
+      const seq      = r.fields['Stop Sequence']||99;
+      const townName = (r.fields['Town Name']||'').trim();
+      if(!townName) return; // skip stops with no town name
+      trainIds.forEach(tid=>{
+        if(!data.trainStops[tid]) data.trainStops[tid]=[];
+        data.trainStops[tid].push({ seq, townName });
+      });
+    });
+    // Debug: log sample stop data
+    const sampleTrain = data.trains[0];
+    if(sampleTrain) {
+      const stops = data.trainStops[sampleTrain.id]||[];
+      log('loadLog', `  Sample Train ${sampleTrain.number} stops: ${stops.map(s=>s.townName).join(' → ')||'none found'}`, 'info');
+    }
+    // Sort stops by sequence for each train
+    Object.keys(data.trainStops).forEach(tid=>{
+      data.trainStops[tid].sort((a,b)=>a.seq-b.seq);
+    });
+    log('loadLog',`  ✓ Train stops loaded for ${Object.keys(data.trainStops).length} trains`,'ok');
+
+    // Waybills
+    log('loadLog','  Fetching Waybills...','info');
+    const wbRecs = await atFetch(TABLE.WAYBILLS);
+    data.waybills = wbRecs.map(r=>({
+      id: r.id,
+      carId: r.fields['Car ID']||'',
+      carLink: r.fields['Car Link']||[],
+      legNumber: r.fields['Leg Number']||1,
+      originTown: r.fields['Origin Town']||'',
+      originSiding: r.fields['Origin Siding']||'',
+      destTown: r.fields['Destination Town']||'',
+      destSiding: r.fields['Destination Siding']||'',
+      loadStatus: r.fields['Load Status']||'',
+    }));
+    log('loadLog',`  ✓ ${data.waybills.length} waybill records`,'ok');
+    if(data.waybills.length>0) log('loadLog',`  Sample waybill: ${data.waybills[0].carId} — ${data.waybills[0].originTown} → ${data.waybills[0].destTown}`,'info');
+
+    log('loadLog','✓ All data loaded. Select a session and click Plan Movements.','ok');
+    setConn('live',`Ready — ${data.waybills.length} waybills`);
+    document.getElementById('btnPlan').disabled=false;
+
+  } catch(err) {
+    log('loadLog',`✗ ${err.message}`,'err');
+    setConn('error','Failed');
+    console.error(err);
+  }
+  btn.disabled=false;
+}
+
+// ── Planning Logic ─────────────────────────────────────────────────────────
+
+// Get train stop town names for a train
+function getTrainTowns(trainId) {
+  const stops = data.trainStops[trainId]||[];
+  return stops.map(s=>s.townName).filter(Boolean);
+}
+
+// Find trains in a session that stop at a given town
+function getTrainsForSessionAndTown(sessionId, townName) {
+  return data.trains.filter(t=>{
+    if(!t.sessionIds.includes(sessionId)) return false;
+    const towns = getTrainTowns(t.id);
+    return towns.includes(townName);
+  });
+}
+
+function planMovements() {
+  const sessionId = document.getElementById('sessionSelect').value;
+  if(!sessionId) { alert('Please select a session first.'); return; }
+
+  const session = data.sessions.find(s=>s.id===sessionId);
+  clearLog('planLog');
+  plannedMovements = [];
+  document.getElementById('planProgress').style.width='0%';
+  document.getElementById('reviewPhase').classList.remove('hidden');
+  document.getElementById('btnWrite').disabled=true;
+
+  log('planLog',`→ Planning movements for ${session.name} (${session.code})...`,'info');
+  log('planLog',`  Processing ${data.waybills.length} waybill movements...`,'info');
+  // Debug: check session matching
+  const trainsInSession = data.trains.filter(t=>t.sessionIds.includes(sessionId));
+  log('planLog',`  Trains in session: ${trainsInSession.map(t=>t.number).join(', ')||'NONE — check Session Train List field'}`,'info');
+  if(data.waybills.length>0) {
+    const wb0 = data.waybills[0];
+    const candidates = getTrainsForSessionAndTown(sessionId, wb0.originTown);
+    log('planLog',`  Sample: ${wb0.carId} from "${wb0.originTown}" — trains found: ${candidates.map(t=>t.number).join(', ')||'none'}`,'info');
+  }
+
+  let direct=0, transfer=0, unassigned=0, nextSession=0;
+
+  data.waybills.forEach((wb,i)=>{
+    const originTown = wb.originTown;
+    const destTown   = wb.destTown;
+    let status       = 'unassigned';
+    let pickupTrain  = null;
+    let setoutTrain  = null;
+    let transferBLK  = false;
+    let sameSessionTransfer = false;
+
+    // Find trains stopping at origin town in this session
+    const pickupCandidates = getTrainsForSessionAndTown(sessionId, originTown);
+
+    if(pickupCandidates.length > 0) {
+      // Try to find a direct train (serves both origin and destination)
+      const directTrain = pickupCandidates.find(t=>{
+        const towns = getTrainTowns(t.id);
+        return towns.includes(destTown);
+      });
+
+      if(directTrain) {
+        // Direct move
+        pickupTrain = directTrain;
+        setoutTrain = directTrain;
+        status = 'direct';
+        direct++;
+      } else {
+        // Check if any pickup train goes to Blue Lake
+        const blkTrain = pickupCandidates.find(t=>{
+          const towns = getTrainTowns(t.id);
+          return towns.includes('Blue Lake');
+        });
+
+        if(blkTrain) {
+          // Car goes to Blue Lake — find a setout train from Blue Lake to destination
+          const setoutCandidates = getTrainsForSessionAndTown(sessionId, 'Blue Lake');
+          const setoutTr = setoutCandidates.find(t=>{
+            const towns = getTrainTowns(t.id);
+            return towns.includes(destTown) && t.id !== blkTrain.id;
+          });
+
+          pickupTrain = blkTrain;
+          transferBLK = true;
+
+          if(setoutTr) {
+            setoutTrain = setoutTr;
+            sameSessionTransfer = true;
+            status = 'transfer';
+            transfer++;
+          } else {
+            // No setout train this session — delivery next session
+            status = 'nextsession';
+            nextSession++;
+          }
+        } else {
+          // Pickup train doesn't reach Blue Lake or destination
+          status = 'unassigned';
+          unassigned++;
+        }
+      }
+    } else {
+      // No train serves origin town this session
+      status = 'unassigned';
+      unassigned++;
+    }
+
+    plannedMovements.push({
+      waybillId: wb.id,
+      carId: wb.carId,
+      carLink: wb.carLink,
+      originTown,
+      originSiding: wb.originSiding,
+      destTown,
+      destSiding: wb.destSiding,
+      loadStatus: wb.loadStatus,
+      pickupTrain,
+      setoutTrain,
+      transferBLK,
+      sameSessionTransfer,
+      status,
+      sessionId,
+      sessionCode: session.code,
+      legNumber: wb.legNumber,
+    });
+
+    document.getElementById('planProgress').style.width=`${((i+1)/data.waybills.length)*100}%`;
+  });
+
+  // Update stats
+  document.getElementById('statDirect').textContent     = direct;
+  document.getElementById('statTransfer').textContent   = transfer;
+  document.getElementById('statUnassigned').textContent = unassigned;
+  document.getElementById('statNextSession').textContent= nextSession;
+
+  log('planLog',`✓ Planning complete.`,'ok');
+  log('planLog',`  Direct: ${direct} | Via Blue Lake: ${transfer} | Next Session: ${nextSession} | Unassigned: ${unassigned}`,'info');
+
+  if(unassigned > 0) log('planLog',`  ⚠ ${unassigned} cars unassigned — check train stops data or waybill origins`,'warn');
+
+  // Populate train filter
+  const trainSel = document.getElementById('filterTrain');
+  trainSel.innerHTML = '<option value="">All Trains</option>';
+  const usedTrains = new Set();
+  plannedMovements.forEach(m=>{
+    if(m.pickupTrain) usedTrains.add(m.pickupTrain.number+'|'+m.pickupTrain.id);
+    if(m.setoutTrain && m.setoutTrain.id !== m.pickupTrain?.id) usedTrains.add(m.setoutTrain.number+'|'+m.setoutTrain.id);
+  });
+  [...usedTrains].sort().forEach(t=>{
+    const [num] = t.split('|');
+    const o=document.createElement('option'); o.value=num; o.textContent=`Train ${num}`; trainSel.appendChild(o);
+  });
+
+  document.getElementById('summaryBox').innerHTML =
+    `Session <strong>${session.name}</strong> — <strong>${data.waybills.length}</strong> movements planned. `+
+    `<strong style="color:var(--green)">${direct} direct</strong>, `+
+    `<strong style="color:var(--purple)">${transfer} via Blue Lake</strong>, `+
+    `<strong style="color:var(--accent)">${nextSession} next session</strong>, `+
+    `<strong style="color:var(--red)">${unassigned} unassigned</strong>.`;
+
+  renderTable();
+  document.getElementById('btnWrite').disabled = false;
+}
+
+// ── Render table ───────────────────────────────────────────────────────────
+function renderTable() {
+  const sf = document.getElementById('filterStatus').value;
+  const tf = document.getElementById('filterTrain').value;
+
+  const filtered = plannedMovements.filter(m=>{
+    if(sf && m.status !== sf) return false;
+    if(tf && m.pickupTrain?.number !== tf && m.setoutTrain?.number !== tf) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('mvBody');
+  tbody.innerHTML='';
+
+  filtered.forEach(m=>{
+    const statusBadge = {
+      direct:      '<span class="badge badge-direct">Direct</span>',
+      transfer:    '<span class="badge badge-transfer">Via Blue Lake</span>',
+      unassigned:  '<span class="badge badge-unassigned">Unassigned</span>',
+      nextsession: '<span class="badge badge-nextsession">Next Session</span>',
+    }[m.status]||'';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML=`
+      <td style="color:var(--accent2)">${m.carId}</td>
+      <td style="color:var(--muted);font-size:10px">${m.loadStatus}</td>
+      <td>${m.originTown||'—'}</td>
+      <td style="color:var(--muted)">${m.originSiding||'—'}</td>
+      <td>${m.destTown||'—'}</td>
+      <td style="color:var(--muted)">${m.destSiding||'—'}</td>
+      <td class="${m.loadStatus==='Loaded'?'load-loaded':'load-empty'}">${m.loadStatus||'—'}</td>
+      <td style="color:var(--accent)">${m.pickupTrain?'Train '+m.pickupTrain.number:'—'}</td>
+      <td style="color:var(--accent2)">${m.setoutTrain?'Train '+m.setoutTrain.number:'—'}</td>
+      <td>${statusBadge}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ── Write to Airtable ──────────────────────────────────────────────────────
+async function writeMovements() {
+  const btn=document.getElementById('btnWrite'); btn.disabled=true;
+  clearLog('writeLog');
+  document.getElementById('writeProgress').style.width='0%';
+  log('writeLog',`→ Writing ${plannedMovements.length} movement records...`,'info');
+
+  try {
+    const fields = plannedMovements.map((m,i)=>({
+      'Movement ID':           `${m.sessionCode}-${m.carId}-L${m.legNumber}`,
+      'Car ID':                m.carId,
+      'Waybill Leg':           m.legNumber,
+      'From Town':             m.originTown||'',
+      'From Siding':           m.originSiding||'',
+      'To Town':               m.destTown||'',
+      'To Siding':             m.destSiding||'',
+      'Load Status':           m.loadStatus||'',
+      'Movement Status':       'Planned',
+      'Transfer at Blue Lake': m.transferBLK,
+      'Same Session Transfer': m.sameSessionTransfer,
+      'Completed':             false,
+      ...(m.carLink&&m.carLink.length>0 ? {'Car Link': m.carLink} : {}),
+      ...(m.sessionId ? {'Session Link': [m.sessionId]} : {}),
+      ...(m.pickupTrain ? {'Pickup Train': [m.pickupTrain.id]} : {}),
+      ...(m.setoutTrain ? {'Setout Train': [m.setoutTrain.id]} : {}),
+    }));
+
+    const written = await atCreate(TABLE.SESSION_MOVES, fields);
+    log('writeLog',`✓ ${written} movement records written successfully!`,'ok');
+    setConn('live',`Done — ${written} movements written`);
+  } catch(err) {
+    log('writeLog',`✗ ${err.message}`,'err');
+    console.error(err);
+  }
+  btn.disabled=false;
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  const s=sessionStorage.getItem('at');
+  if(s){ token=s; document.getElementById('tokenStatus').textContent='✓ Token loaded'; document.getElementById('tokenStatus').style.color='var(--green)'; document.getElementById('tokenInput').value='••••••••••••••••'; setConn('','Token ready — click Load Data'); }
+});
+</script>
+</body>
+</html>
