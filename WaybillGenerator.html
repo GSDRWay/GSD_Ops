@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GSD Operations 2.0 — Waybill Generator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap');
+
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a; --border: #2e3350;
+    --accent: #e8a020; --accent2: #3d9be9; --green: #3ecf74; --red: #e85c5c;
+    --text: #d4d8f0; --muted: #6b7194;
+    --mono: 'Share Tech Mono', monospace; --sans: 'Barlow', sans-serif; --cond: 'Barlow Condensed', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+  header { background: var(--surface); border-bottom: 2px solid var(--accent); padding: 14px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; }
+  .logo { font-family: var(--cond); font-size: 22px; font-weight: 700; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; }
+  .logo span { color: var(--text); font-weight: 400; }
+  .header-status { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; }
+  .status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.error { background: var(--red); }
+
+  main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+
+  .api-bar { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent2); border-radius: 6px; padding: 12px 16px; display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+  .api-bar label { font-family: var(--mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
+  .api-bar input { flex: 1; min-width: 260px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 7px 10px; }
+  .api-bar input:focus { outline: none; border-color: var(--accent2); }
+  #tokenStatus { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+  .btn { background: var(--accent); color: #000; border: none; border-radius: 4px; padding: 9px 20px; font-family: var(--cond); font-size: 14px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn.green { background: var(--green); }
+  .btn.blue { background: var(--accent2); }
+
+  .phase { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
+  .phase-header { padding: 14px 20px; background: var(--surface2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .phase-num { background: var(--accent); color: #000; font-family: var(--cond); font-weight: 700; font-size: 13px; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .phase-title { font-family: var(--cond); font-size: 16px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+  .phase-body { padding: 20px; }
+
+  .stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .stat-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 18px; flex: 1; min-width: 110px; }
+  .stat-val { font-family: var(--mono); font-size: 28px; color: var(--accent); line-height: 1; }
+  .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+  .log { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 12px; font-family: var(--mono); font-size: 11px; color: var(--muted); max-height: 180px; overflow-y: auto; line-height: 1.8; }
+  .log .ok { color: var(--green); } .log .warn { color: var(--accent); } .log .err { color: var(--red); } .log .info { color: var(--accent2); }
+
+  .progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin: 10px 0; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; width: 0%; }
+
+  .action-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+
+  .summary-box { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--green); border-radius: 6px; padding: 14px 18px; margin-bottom: 16px; font-size: 13px; line-height: 1.8; }
+  .summary-box strong { color: var(--accent); }
+
+  .filter-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .filter-row select, .filter-row input { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 6px 10px; }
+
+  .wb-table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: var(--surface2); color: var(--muted); font-family: var(--cond); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 11px; padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 11px; }
+  tr:hover td { background: var(--surface2); }
+
+  .leg-badge { display: inline-block; width: 18px; height: 18px; border-radius: 50%; text-align: center; line-height: 18px; font-size: 10px; font-weight: 700; margin-right: 2px; }
+  .leg-1 { background: #3d9be9; color: #000; } .leg-2 { background: #3ecf74; color: #000; } .leg-3 { background: #e8a020; color: #000; } .leg-4 { background: #9b6ae8; color: #000; }
+  .load-loaded { color: var(--green); } .load-empty { color: var(--muted); }
+  .car-type-tag { background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; font-size: 10px; color: var(--muted); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GSD Ops 2.0 <span>/ Waybill Generator</span></div>
+  <div class="header-status">
+    <span class="status-dot" id="connDot"></span>
+    <span id="connLabel">Not connected</span>
+  </div>
+</header>
+
+<main>
+
+  <div class="api-bar">
+    <label>Airtable Token</label>
+    <input type="password" id="tokenInput" placeholder="patXXXXXXXXXXXXXX...">
+    <button class="btn secondary" onclick="saveToken()">Save</button>
+    <span id="tokenStatus">Paste your Airtable Personal Access Token</span>
+  </div>
+
+  <div class="phase">
+    <div class="phase-header"><div class="phase-num">1</div><div class="phase-title">Load Data from Airtable</div></div>
+    <div class="phase-body">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">Reads Rolling Stock, Car Types, Sidings and Towns directly from GSD Operations 2.0.</p>
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-val" id="statCars">—</div><div class="stat-label">Cars</div></div>
+        <div class="stat-card"><div class="stat-val" id="statTypes">—</div><div class="stat-label">Car Types</div></div>
+        <div class="stat-card"><div class="stat-val" id="statSidings">—</div><div class="stat-label">Sidings</div></div>
+        <div class="stat-card"><div class="stat-val" id="statTowns">—</div><div class="stat-label">Towns</div></div>
+      </div>
+      <div class="log" id="loadLog"><span class="info">Save your token then click Load Data.</span></div>
+      <div class="action-row"><button class="btn blue" id="btnLoad" onclick="loadData()">Load Data</button></div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-header"><div class="phase-num">2</div><div class="phase-title">Generate Waybill Cycles</div></div>
+    <div class="phase-body">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">Creates 4-leg waybill cycles for each active freight car. Tank Cars get 2-leg out-and-back cycles. Siding eligibility uses your Cars Accepted field.</p>
+      <div class="action-row" style="margin-top:0;margin-bottom:14px;">
+        <label style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Generate Leg</label>
+        <select id="legSelect" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:12px;padding:7px 10px;">
+          <option value="1">Leg 1 — MWF AM (Session 1)</option>
+          <option value="2">Leg 2 — MWF PM (Session 2)</option>
+          <option value="3">Leg 3 — TT AM (Session 3)</option>
+          <option value="4">Leg 4 — TT PM (Session 4)</option>
+        </select>
+        <button class="btn" id="btnGenerate" onclick="generateWaybills()" disabled>Generate Waybills</button>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="genProgress"></div></div>
+      <div class="log" id="genLog"><span class="info">Load data first.</span></div>
+    </div>
+  </div>
+
+  <div class="phase hidden" id="reviewPhase">
+    <div class="phase-header"><div class="phase-num">3</div><div class="phase-title">Review &amp; Write to Airtable</div></div>
+    <div class="phase-body">
+      <div id="summaryBox" class="summary-box"></div>
+      <div class="filter-row">
+        <select id="filterType" onchange="renderTable()"><option value="">All Car Types</option></select>
+        <select id="filterLeg" onchange="renderTable()">
+          <option value="">All Legs</option>
+          <option value="1">Leg 1</option><option value="2">Leg 2</option>
+          <option value="3">Leg 3</option><option value="4">Leg 4</option>
+        </select>
+        <input type="text" id="filterCar" placeholder="Filter by Car ID..." oninput="renderTable()">
+      </div>
+      <div class="wb-table-wrap">
+        <table>
+          <thead><tr><th>Car ID</th><th>Type</th><th>Leg</th><th>From Town</th><th>From Siding</th><th>To Town</th><th>To Siding</th><th>Load</th></tr></thead>
+          <tbody id="wbBody"></tbody>
+        </table>
+      </div>
+      <div class="action-row">
+        <button class="btn green" id="btnWrite" onclick="writeToAirtable()" disabled>Write to Airtable</button>
+        <button class="btn secondary" onclick="generateWaybills()">Regenerate</button>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="writeProgress"></div></div>
+      <div class="log" id="writeLog" style="margin-top:12px;"><span class="info">Review above then click Write to Airtable.</span></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const BASE_ID = 'app49M67jxGfWziFD';
+const AT_API  = 'https://api.airtable.com/v0';
+const TABLE   = { ROLLING_STOCK:'tblW8vBx4TgNWRVP1', CAR_TYPES:'tblkNhxi86Bj9NgIe', SIDINGS:'tblOGpM1mH4U5YnPd', TOWNS:'tblal6lwfCvBBHpE6', WAYBILLS:'tbl5QlUJ0IVi6748p', RAILWAYS:'tblC7xiS7baMJpvRF' };
+
+let token = '';
+let data  = { cars:[], carTypes:{}, sidings:[], towns:[], railways:{} };
+let generatedWaybills = [];
+
+// Token
+function saveToken() {
+  const v = document.getElementById('tokenInput').value.trim();
+  if (v.length > 10) {
+    sessionStorage.setItem('at', v); token = v;
+    document.getElementById('tokenStatus').textContent = '✓ Token saved';
+    document.getElementById('tokenStatus').style.color = 'var(--green)';
+    document.getElementById('tokenInput').value = '••••••••••••••••';
+    setConn('', 'Token ready — click Load Data');
+  } else {
+    document.getElementById('tokenStatus').textContent = '✗ Token looks too short';
+    document.getElementById('tokenStatus').style.color = 'var(--red)';
+  }
+}
+function getToken() {
+  if (token) return token;
+  const s = sessionStorage.getItem('at'); if (s) { token=s; return s; }
+  return document.getElementById('tokenInput').value.trim() || null;
+}
+function setConn(state, label) {
+  document.getElementById('connDot').className = 'status-dot' + (state==='live'?' live':state==='error'?' error':'');
+  document.getElementById('connLabel').textContent = label;
+}
+
+// Logging
+function log(el, msg, cls='') {
+  const d=document.getElementById(el), line=document.createElement('div');
+  line.className=cls; line.textContent=msg; d.appendChild(line); d.scrollTop=d.scrollHeight;
+}
+function clearLog(el) { document.getElementById(el).innerHTML=''; }
+
+// Airtable REST — fetch all records with pagination
+async function atFetch(tableId) {
+  const tok = getToken();
+  if (!tok) throw new Error('No token saved.');
+  let records=[], offset=null;
+  do {
+    const url = new URL(`${AT_API}/${BASE_ID}/${tableId}`);
+    url.searchParams.set('pageSize','100');
+    if (offset) url.searchParams.set('offset', offset);
+    const resp = await fetch(url.toString(), { headers:{ Authorization:`Bearer ${tok}` } });
+    if (!resp.ok) {
+      const e = await resp.json().catch(()=>({}));
+      throw new Error(`Airtable ${resp.status}: ${e.error?.message || resp.statusText}`);
+    }
+    const json = await resp.json();
+    records = records.concat(json.records||[]);
+    offset = json.offset||null;
+  } while(offset);
+  return records;
+}
+
+// Airtable REST — create records in batches of 10
+async function atCreate(tableId, fieldsList) {
+  const tok = getToken();
+  if (!tok) throw new Error('No token saved.');
+  const url = `${AT_API}/${BASE_ID}/${tableId}`;
+  let created=0;
+  for (let i=0; i<fieldsList.length; i+=10) {
+    const batch = fieldsList.slice(i, i+10);
+    const resp = await fetch(url, {
+      method:'POST',
+      headers:{ Authorization:`Bearer ${tok}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ records: batch.map(f=>({fields:f})) })
+    });
+    if (!resp.ok) {
+      const e = await resp.json().catch(()=>({}));
+      throw new Error(`Write error ${resp.status}: ${e.error?.message || resp.statusText}`);
+    }
+    created += batch.length;
+    document.getElementById('writeProgress').style.width = `${(created/fieldsList.length)*100}%`;
+    log('writeLog', `  ✓ Batch ${Math.floor(i/10)+1}: ${batch.length} written (${created}/${fieldsList.length})`, 'ok');
+    await new Promise(r=>setTimeout(r,220)); // rate limit respect
+  }
+  return created;
+}
+
+// Load all data
+async function loadData() {
+  const btn=document.getElementById('btnLoad'); btn.disabled=true;
+  clearLog('loadLog'); setConn('','Loading...');
+  log('loadLog','→ Connecting to Airtable...','info');
+
+  try {
+    // Railways
+    log('loadLog','  Fetching Railways...','info');
+    const ryRecs = await atFetch(TABLE.RAILWAYS);
+    data.railways={};
+    ryRecs.forEach(r=>{
+      const code=r.fields['Railway Code']||'';
+      data.railways[r.id]=code;
+    });
+    log('loadLog','  ✓ '+ryRecs.length+' railways: '+Object.values(data.railways).join(', '),'ok');
+
+    // Car Types
+    log('loadLog','  Fetching Car Types...','info');
+    const ctRecs = await atFetch(TABLE.CAR_TYPES);
+    data.carTypes={};
+    ctRecs.forEach(r=>{
+      const name = r.fields['Car Type Name']||r.fields['Name']||'';
+      const ct = { id:r.id, name, loadRule:r.fields['Load Direction Rule']||'Either Direction Loaded', foreignRunning:r.fields['Foreign Running']===true };
+      data.carTypes[r.id]=ct;
+      if(name) data.carTypes[name]=ct;
+    });
+    log('loadLog',`  ✓ ${ctRecs.length} car types: ${ctRecs.map(r=>r.fields['Car Type Name']||r.fields['Name']).join(', ')}`, 'ok');
+    document.getElementById('statTypes').textContent=ctRecs.length;
+
+    // Towns
+    log('loadLog','  Fetching Towns...','info');
+    const tnRecs = await atFetch(TABLE.TOWNS);
+    data.towns = tnRecs.map(r=>{
+      const rl = r.fields['Railway Line'];
+      const railwayLines = Array.isArray(rl)?rl:(rl?[rl]:[]);
+      return { id:r.id, name:r.fields['Town Name']||r.fields['Name']||'', type:r.fields['Town Type']||'', railwayLines };
+    });
+    if(data.towns.length>0) log('loadLog','  Sample town: '+data.towns[0].name+' → lines: ['+data.towns[0].railwayLines.join(',')+']','info');
+    log('loadLog',`  ✓ ${data.towns.length} towns`,'ok');
+    document.getElementById('statTowns').textContent=data.towns.length;
+
+    // Sidings
+    log('loadLog','  Fetching Sidings...','info');
+    const sdRecs = await atFetch(TABLE.SIDINGS);
+    log('loadLog',`  Raw: ${sdRecs.length} sidings. Fields: ${sdRecs.length>0?Object.keys(sdRecs[0].fields).join(', '):'none'}`,'info');
+
+    data.sidings = sdRecs.map(r=>{
+      // Resolve linked town
+      const townLinks = r.fields['Towns']||r.fields['Town']||[];
+      let townName='';
+      if(Array.isArray(townLinks)&&townLinks.length>0){
+        const t=data.towns.find(t=>t.id===townLinks[0]);
+        townName=t?t.name:townLinks[0];
+      } else if(typeof townLinks==='string') townName=townLinks;
+
+      // Cars Accepted — linked Car Types records
+      const caLinks = r.fields['Car Types']||r.fields['Cars Accepted']||[];
+      const acceptedTypeNames = Array.isArray(caLinks)
+        ? caLinks.map(id=>data.carTypes[id]?.name||'').filter(Boolean)
+        : [];
+
+      const active = r.fields['Active'];
+      const sidingType = r.fields['Siding Type']||'';
+      return {
+        id:r.id,
+        name: r.fields['Siding Name']||r.fields['Name']||'',
+        town: townName,
+        active: active===undefined||active===null||active===true||active===1,
+        sidingType,
+        acceptedTypeNames
+      };
+    }).filter(s=>s.active&&s.name);
+
+    log('loadLog',`  ✓ ${data.sidings.length} active sidings`,'ok');
+    document.getElementById('statSidings').textContent=data.sidings.length;
+
+    // Rolling Stock
+    log('loadLog','  Fetching Rolling Stock...','info');
+    const rsRecs = await atFetch(TABLE.ROLLING_STOCK);
+    log('loadLog',`  Raw: ${rsRecs.length} cars. Fields: ${rsRecs.length>0?Object.keys(rsRecs[0].fields).join(', '):'none'}`,'info');
+
+    data.cars = rsRecs.map(r=>{
+      // Car Type — linked record
+      const ctLink = r.fields['Car Type']||[];
+      const carTypeName = Array.isArray(ctLink)&&ctLink.length>0
+        ? (data.carTypes[ctLink[0]]?.name||'')
+        : (r.fields['Car Type Name']||typeof r.fields['Car Type']==='string'?r.fields['Car Type']:'');
+
+      // Current Siding — linked record, resolve to siding name and derive town from siding
+      const sdLink = r.fields['Current Siding Link']||r.fields['Current Siding']||[];
+      let currentSiding='', currentTown='';
+      if(Array.isArray(sdLink)&&sdLink.length>0){
+        const s=data.sidings.find(s=>s.id===sdLink[0]);
+        if(s){ currentSiding=s.name; currentTown=s.town; }
+        else currentSiding=sdLink[0];
+      } else if(typeof sdLink==='string') currentSiding=sdLink;
+
+      const active=r.fields['Active'];
+      return {
+        id:r.id,
+        carId: r.fields['Car ID']||r.fields['Stock ID']||r.fields['Name']||'',
+        carTypeName,
+        currentTown,
+        currentSiding,
+        loadStatus: r.fields['Load Status']||'Empty',
+        homeDepotTown: (()=>{
+          const hd=r.fields['Home Depot'];
+          if(!hd) return '';
+          if(Array.isArray(hd)&&hd.length>0){
+            const t=data.towns.find(t=>t.id===hd[0]);
+            return t?t.name:hd[0];
+          }
+          return typeof hd==='string'?hd:'';
+        })(),
+        railwayOwner: (()=>{
+          const ro=r.fields['Railway Owner'];
+          if(!ro) return '';
+          if(typeof ro==='string') return ro;
+          if(Array.isArray(ro)&&ro.length>0) return data.railways[ro[0]]||ro[0];
+          return '';
+        })(),
+        active: active===undefined||active===null||active===true||active===1
+      };
+    }).filter(c=>c.active&&c.carId);
+
+    log('loadLog',`  ✓ ${data.cars.length} active cars`,'ok');
+    document.getElementById('statCars').textContent=data.cars.length;
+
+    log('loadLog','✓ All data loaded successfully.','ok');
+    setConn('live',`Connected — ${data.cars.length} cars ready`);
+    document.getElementById('btnGenerate').disabled=false;
+
+    // Populate type filter
+    const sel=document.getElementById('filterType');
+    sel.innerHTML='<option value="">All Car Types</option>';
+    [...new Set(data.cars.map(c=>c.carTypeName).filter(Boolean))].sort().forEach(t=>{
+      const o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o);
+    });
+
+  } catch(err) {
+    log('loadLog',`✗ ${err.message}`,'err');
+    setConn('error','Failed');
+    console.error(err);
+  }
+  btn.disabled=false;
+}
+
+// Waybill generation
+const STAGING_TYPES  = ['Staging Track','Classification Yard'];
+const EXCLUDED_TYPES = ['Passenger Platform','Passenger Dock','Loco Depot'];
+
+// Get home railway prefix from car type name eg "SAR Louvred Van" -> "SAR"
+function getHomeRailway(carTypeName) {
+  if(!carTypeName) return '';
+  const parts = carTypeName.split(' ');
+  return parts[0]||'';
+}
+
+// Get railway lines for a town
+function getTownRailways(townName) {
+  const t = data.towns.find(t=>t.name===townName);
+  return t?t.railwayLines||[]:[];
+}
+
+// Is this siding strictly on the car's home railway?
+// For home-only cars: town must have ONLY that railway (or be a staging/All town)
+const ALL_TOWNS = ['Mile End Yard','Dry Creek Yard','Heywood','Blue Lake','Snuggery'];
+
+function isHomeRailway(siding, homeRailway) {
+  // Staging/neutral towns accessible to all
+  if(ALL_TOWNS.includes(siding.town)) return true;
+  const lines = getTownRailways(siding.town);
+  if(!lines||lines.length===0) return true;
+  // Town must have ONLY this railway — if it has multiple it's shared territory
+  // and home-only cars cannot go there
+  if(lines.length===1) return lines[0]===homeRailway;
+  // Multi-railway towns only accessible to foreign runners, not home-only cars
+  return false;
+}
+
+// Get all eligible sidings for a car type (ignoring railway restrictions)
+function getTypeSidings(carTypeName) {
+  return data.sidings.filter(s=>{
+    if(EXCLUDED_TYPES.includes(s.sidingType)) return false;
+    const isStaging = STAGING_TYPES.includes(s.sidingType);
+    if(!isStaging){
+      if(!s.acceptedTypeNames||s.acceptedTypeNames.length===0) return false;
+      if(!s.acceptedTypeNames.includes(carTypeName)) return false;
+    }
+    return true;
+  });
+}
+
+// Get staging sidings for a specific town
+function getStagingSidingsInTown(townName) {
+  return data.sidings.filter(s=>s.town===townName&&STAGING_TYPES.includes(s.sidingType));
+}
+
+function getSidingsFor(carTypeName, homeRailway, foreignAllowed) {
+  const allEligible = getTypeSidings(carTypeName);
+  if(foreignAllowed) return allEligible; // foreign runners can go anywhere type-eligible
+  // Home-only: restrict to home railway towns
+  return allEligible.filter(s=>isHomeRailway(s, homeRailway));
+}
+
+function pickRandom(arr, excludeNames=[]) {
+  if(!arr||arr.length===0) return null;
+  const pool=arr.filter(s=>!excludeNames.includes(s.name));
+  const src=pool.length>0?pool:arr;
+  return src[Math.floor(Math.random()*src.length)]||null;
+}
+
+function buildLegs(car) {
+  const ct = data.carTypes[car.carTypeName];
+  const loadRule = ct?.loadRule||'Either Direction Loaded';
+  const isTankCar = car.carTypeName&&car.carTypeName.toLowerCase().includes('tank');
+  const homeRailway = getHomeRailway(car.carTypeName);
+  const foreignAllowed = ct?.foreignRunning===true;
+  const homeDepotTown = car.homeDepotTown||'';
+
+  // Get eligible sidings for home running
+  const homeSidings = getSidingsFor(car.carTypeName, homeRailway, false);
+  // Get all eligible sidings including foreign
+  const allSidings = foreignAllowed ? getTypeSidings(car.carTypeName) : homeSidings;
+  // Get foreign-only sidings (not on home railway)
+  const foreignSidings = allSidings.filter(s=>!isHomeRailway(s, homeRailway));
+  // Get home depot staging sidings
+  const depotSidings = homeDepotTown ? getStagingSidingsInTown(homeDepotTown) : homeSidings.filter(s=>STAGING_TYPES.includes(s.sidingType));
+
+  if(homeSidings.length < 1 && allSidings.length < 1) return [];
+
+  const s0 = car.currentSiding||'';
+  const t0 = car.currentTown||'';
+  const legs = [];
+
+  if(isTankCar||loadRule==='Outbound Loaded') {
+    // Tank cars: loaded to fuel depot, empty back to home depot
+    const dest = pickRandom(allSidings, [s0]);
+    const home = depotSidings.length>0 ? depotSidings[Math.floor(Math.random()*depotSidings.length)] : {name:s0,town:t0};
+    [{o:t0,os:s0,d:dest.town,ds:dest.name,l:'Loaded'},
+     {o:dest.town,os:dest.name,d:home.town,ds:home.name,l:'Empty'},
+     {o:home.town,os:home.name,d:dest.town,ds:dest.name,l:'Loaded'},
+     {o:dest.town,os:dest.name,d:home.town,ds:home.name,l:'Empty'}]
+    .forEach((x,i)=>legs.push({leg:i+1,originTown:x.o,originSiding:x.os,destTown:x.d,destSiding:x.ds,load:x.l}));
+
+  } else if(foreignAllowed && foreignSidings.length>0) {
+    // Foreign running: deliver to foreign siding then return to home depot
+    const leg1dest = (homeSidings.length>0 ? pickRandom(homeSidings,[s0]) : null) || {name:s0,town:t0};
+    const foreignDest = pickRandom(foreignSidings,[]);
+    if(!foreignDest) return [];
+    const homeDepot = (depotSidings.length>0 ? depotSidings[Math.floor(Math.random()*depotSidings.length)] : null)
+                   || pickRandom(homeSidings,[foreignDest.name])
+                   || {name:s0,town:t0};
+    const leg4dest = pickRandom(homeSidings,[homeDepot.name]) || {name:s0,town:t0};
+
+    [{o:t0,os:s0,d:leg1dest.town,ds:leg1dest.name,l:'Loaded'},
+     {o:leg1dest.town,os:leg1dest.name,d:foreignDest.town,ds:foreignDest.name,l:'Loaded'},
+     {o:foreignDest.town,os:foreignDest.name,d:homeDepot.town,ds:homeDepot.name,l:'Empty'},
+     {o:homeDepot.town,os:homeDepot.name,d:leg4dest.town,ds:leg4dest.name,l:'Loaded'}]
+    .forEach((x,i)=>legs.push({leg:i+1,originTown:x.o,originSiding:x.os,destTown:x.d,destSiding:x.ds,load:x.l}));
+
+  } else {
+    // Standard home railway 4-leg cycle
+    if(homeSidings.length<2) return [];
+    let curTown=t0, curSiding=s0;
+    const used=[s0];
+    for(let i=1;i<=4;i++){
+      const next=pickRandom(homeSidings.filter(s=>s.name!==curSiding),used.slice(-1));
+      legs.push({leg:i,originTown:curTown,originSiding:curSiding,destTown:next.town,destSiding:next.name,load:'Loaded'});
+      used.push(next.name); curTown=next.town; curSiding=next.name;
+    }
+  }
+  return legs;
+}
+
+
+async function generateWaybills() {
+  const btn=document.getElementById('btnGenerate'); btn.disabled=true;
+  clearLog('genLog'); generatedWaybills=[];
+  document.getElementById('genProgress').style.width='0%';
+  document.getElementById('reviewPhase').classList.remove('hidden');
+  document.getElementById('btnWrite').disabled=true;
+  log('genLog',`→ Generating for ${data.cars.length} cars...`,'info');
+
+  const selectedLeg = parseInt(document.getElementById('legSelect').value);
+  log('genLog',`→ Generating Leg ${selectedLeg} only...`,'info');
+  let skipped=0;
+  data.cars.forEach((car,i)=>{
+    const legs=buildLegs(car);
+    if(!legs.length){
+      log('genLog',`  ⚠ ${car.carId} (${car.carTypeName}) — skipped, no eligible sidings`,'warn');
+      skipped++;
+    } else {
+      const leg = legs.find(l=>l.leg===selectedLeg);
+      if(leg) generatedWaybills.push({carId:car.carId,carRecordId:car.id,carTypeName:car.carTypeName,...leg});
+    }
+    document.getElementById('genProgress').style.width=`${((i+1)/data.cars.length)*100}%`;
+  });
+
+  log('genLog',`✓ ${generatedWaybills.length} legs for ${data.cars.length-skipped} cars.${skipped?` ${skipped} skipped.`:''}`,'ok');
+  document.getElementById('summaryBox').innerHTML=
+    `<strong>Leg ${selectedLeg}</strong> generated for <strong>${generatedWaybills.length}</strong> cars.`+
+    (skipped?` <span style="color:var(--accent)">${skipped} skipped.</span>`:'')+
+    ` Review below then click <strong>Write to Airtable</strong>.`;
+  renderTable();
+  document.getElementById('btnWrite').disabled=false;
+  btn.disabled=false;
+}
+
+function renderTable() {
+  const tf=document.getElementById('filterType').value;
+  const lf=document.getElementById('filterLeg').value;
+  const cf=document.getElementById('filterCar').value.toLowerCase();
+  const filtered=generatedWaybills.filter(wb=>(!tf||wb.carTypeName===tf)&&(!lf||wb.leg===parseInt(lf))&&(!cf||wb.carId.toLowerCase().includes(cf)));
+  const tbody=document.getElementById('wbBody'); tbody.innerHTML='';
+  filtered.forEach(wb=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="color:var(--accent2)">${wb.carId}</td><td><span class="car-type-tag">${wb.carTypeName||'—'}</span></td><td><span class="leg-badge leg-${wb.leg}">${wb.leg}</span></td><td>${wb.originTown||'—'}</td><td style="color:var(--muted)">${wb.originSiding||'—'}</td><td>${wb.destTown||'—'}</td><td style="color:var(--muted)">${wb.destSiding||'—'}</td><td class="${wb.load==='Loaded'?'load-loaded':'load-empty'}">${wb.load}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+async function writeToAirtable() {
+  const btn=document.getElementById('btnWrite'); btn.disabled=true;
+  clearLog('writeLog');
+  document.getElementById('writeProgress').style.width='0%';
+  log('writeLog',`→ Writing ${generatedWaybills.length} records to Airtable...`,'info');
+  try {
+    const fields=generatedWaybills.map(wb=>({
+      'Waybill ID':        `${wb.carId}-L${wb.leg}`,
+      'Car ID':            wb.carId,
+      'Leg Number':        wb.leg,
+      'Origin Town':       wb.originTown||'',
+      'Origin Siding':     wb.originSiding||'',
+      'Destination Town':  wb.destTown||'',
+      'Destination Siding':wb.destSiding||'',
+      'Load Status':       wb.load,
+      'Active Leg':        wb.leg===1,
+      'System Generated':  true,
+      'Car Link':          [wb.carRecordId],
+    }));
+    const written=await atCreate(TABLE.WAYBILLS, fields);
+    log('writeLog',`✓ ${written} waybill records written successfully!`,'ok');
+    setConn('live',`Done — ${written} waybills written`);
+  } catch(err) {
+    log('writeLog',`✗ ${err.message}`,'err');
+    console.error(err);
+  }
+  btn.disabled=false;
+}
+
+// Init
+window.addEventListener('load',()=>{
+  const s=sessionStorage.getItem('at');
+  if(s){ token=s; document.getElementById('tokenStatus').textContent='✓ Token loaded'; document.getElementById('tokenStatus').style.color='var(--green)'; document.getElementById('tokenInput').value='••••••••••••••••'; setConn('','Token ready — click Load Data'); }
+});
+</script>
+</body>
+</html>
