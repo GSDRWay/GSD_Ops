@@ -209,7 +209,7 @@ async function atFetch(tableId) {
     const url = new URL(`${AT_API}/${BASE_ID}/${tableId}`);
     url.searchParams.set('pageSize','100');
     if (offset) url.searchParams.set('offset', offset);
-    const resp = await fetch(url.toString(), { headers:{ Authorization:`Bearer ${tok}` } });
+    const resp = await fetch(url.toString(), { method:'GET', mode:'cors', credentials:'omit', headers:{ Authorization:`Bearer ${tok}`, 'Content-Type':'application/json' } });
     if (!resp.ok) {
       const e = await resp.json().catch(()=>({}));
       throw new Error(`Airtable ${resp.status}: ${e.error?.message || resp.statusText}`);
@@ -231,6 +231,8 @@ async function atCreate(tableId, fieldsList) {
     const batch = fieldsList.slice(i, i+10);
     const resp = await fetch(url, {
       method:'POST',
+      mode:'cors',
+      credentials:'omit',
       headers:{ Authorization:`Bearer ${tok}`, 'Content-Type':'application/json' },
       body: JSON.stringify({ records: batch.map(f=>({fields:f})) })
     });
